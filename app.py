@@ -128,6 +128,7 @@ selected_tenure_offset = tenure_mapping[selected_tenure]
 end_date = pd.to_datetime("2023-11-01")  # Last date available in the data
 start_date = end_date - selected_tenure_offset
 
+# Train Model Button
 train_model_button = st.button("Train Model")
 
 if train_model_button:
@@ -170,3 +171,8 @@ if train_model_button:
     summary_df = pd.DataFrame(summary_data)
     st.write("\nCorrelation and Price Prediction Summary:")
     st.table(summary_df)
+
+    # Display stocks sorted by correlation scores
+    st.write("\nStocks Sorted by Correlation with CPI Change:")
+    sorted_summary_df = summary_df.sort_values(by='Correlation with CPI Change', ascending=True)
+    st.table(sorted_summary_df)
