@@ -59,11 +59,10 @@ def analyze_stock(stock_data, cpi_data, expected_inflation):
     model_arima = auto_arima(y_lr, seasonal=False, suppress_warnings=True)
 
     # Train LSTM model
+    min_max_scaler = MinMaxScaler()  # Added missing MinMaxScaler
     scaled_data = min_max_scaler.fit_transform(y_lr.values.reshape(-1, 1))
     
-    # Prepare data for LSTM
     x_train, y_train = prepare_data_for_lstm(scaled_data)
-
     model_lstm = build_lstm_model(x_train.shape[1])
     model_lstm.fit(x_train, y_train, epochs=50, batch_size=32)
 
