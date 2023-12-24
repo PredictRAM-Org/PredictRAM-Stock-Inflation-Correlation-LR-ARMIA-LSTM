@@ -19,13 +19,13 @@ stock_folder = "stock_folder"
 stock_files = [f for f in os.listdir(stock_folder) if f.endswith(".xlsx")]
 
 # Function to calculate correlation and build models
-def analyze_stock(stock_data, cpi_data, expected_inflation):
+def analyze_stock(stock_data, cpi_data, expected_inflation, min_max_scaler):
     stock_data['Date'] = pd.to_datetime(stock_data['Date'])
     stock_data.set_index('Date', inplace=True)
-    
+
     # Merge stock and CPI data on Date
     merged_data = pd.merge(stock_data, cpi_data, left_index=True, right_index=True, how='inner')
-    
+
     # Handle NaN values in CPI column
     if merged_data['CPI'].isnull().any():
         st.write(f"Warning: NaN values found in 'CPI' column for {stock_data.name}. Dropping NaN values.")
@@ -59,9 +59,8 @@ def analyze_stock(stock_data, cpi_data, expected_inflation):
     model_arima = auto_arima(y_lr, seasonal=False, suppress_warnings=True)
 
     # Train LSTM model
-    min_max_scaler = MinMaxScaler()  # Added missing MinMaxScaler
     scaled_data = min_max_scaler.fit_transform(y_lr.values.reshape(-1, 1))
-    
+
     x_train, y_train = prepare_data_for_lstm(scaled_data)
     model_lstm = build_lstm_model(x_train.shape[1])
     model_lstm.fit(x_train, y_train, epochs=50, batch_size=32)
@@ -76,7 +75,7 @@ def analyze_stock(stock_data, cpi_data, expected_inflation):
 
     # Predict future prices using LSTM
     last_observed_price = scaled_data[-1]
-    future_price_lstm = predict_future_lstm(last_observed_price, model_lstm)
+    future_price_lstm = predict_future_lstm(last_observed_price, model_lstm, min_max_scaler)
     st.write(f"Predicted Stock Price for Future Inflation (LSTM): {future_price_lstm}")
 
     # Display the latest actual price
@@ -100,15 +99,15 @@ def build_lstm_model(input_shape):
     model.compile(optimizer='adam', loss='mean_squared_error')
     return model
 
-def predict_future_lstm(last_observed_price, model, num_steps=1):
+def predict_future_lstm(last_observed_price, model, min_max_scaler, num_steps=1):
     predicted_prices = []
     input_data = last_observed_price.reshape(1, -1, 1)
-    
+
     for _ in range(num_steps):
         predicted_price = model.predict(input_data)
         predicted_prices.append(predicted_price[0, 0])
         input_data = np.append(input_data[:, 1:, :], predicted_price.reshape(1, 1, 1), axis=1)
-    
+
     return min_max_scaler.inverse_transform(np.array(predicted_prices).reshape(-1, 1))[-1, 0]
 
 # Streamlit UI
@@ -133,7 +132,7 @@ train_model_button = st.button("Train Model")
 
 if train_model_button:
     st.write(f"Training model with Expected Inflation: {expected_inflation} and Tenure: {selected_tenure}...")
-    
+
     correlations = []
     future_prices_lr_list = []
     future_prices_arima_list = []
@@ -145,12 +144,13 @@ if train_model_button:
         st.write(f"\nTraining for {stock_file}...")
         selected_stock_data = pd.read_excel(os.path.join(stock_folder, stock_file))
         selected_stock_data.name = stock_file  # Assign a name to the stock_data for reference
-        
+
         # Filter stock data based on selected tenure
         selected_stock_data = selected_stock_data[(selected_stock_data['Date'] >= start_date) & (selected_stock_data['Date'] <= end_date)]
-        
-        correlation_close_cpi, future_price_lr, future_price_arima, latest_actual_price, future_price_lstm = analyze_stock(selected_stock_data, cpi_data, expected_inflation)
-        
+
+        min_max_scaler = MinMaxScaler()  # Move the MinMaxScaler initialization inside the loop
+        correlation_close_cpi, future_price_lr, future_price_arima, latest_actual_price, future_price_lstm = analyze_stock(selected_stock_data, cpi_data, expected_inflation, min_max_scaler)
+
         correlations.append(correlation_close_cpi)
         future_prices_lr_list.append(future_price_lr)
         future_prices_arima_list.append(future_price_arima)
